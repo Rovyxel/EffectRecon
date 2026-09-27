@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from effectrecon import EffectIdentity, IDENTITY_SCHEMA
+from effectrecon import IDENTITY_SCHEMA, EffectIdentity
 
 
 def make_identity(
@@ -183,9 +183,7 @@ def test_bool_and_int_are_supported_as_distinct_json_types() -> None:
 def test_supported_nested_lists_and_dictionaries_are_preserved() -> None:
     identity = make_identity({"values": [None, False, 0, "text", {"inner": [3]}]})
 
-    assert identity.parameters == {
-        "values": [None, False, 0, "text", {"inner": [3]}]
-    }
+    assert identity.parameters == {"values": [None, False, 0, "text", {"inner": [3]}]}
 
 
 def test_fingerprint_has_required_versioned_lowercase_format() -> None:

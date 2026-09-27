@@ -42,9 +42,7 @@ class EffectIdentity:
     ) -> None:
         normalized_operation = _normalize_identity_string(operation, "operation")
         normalized_target = _normalize_identity_string(target, "target")
-        normalized_key = _normalize_identity_string(
-            idempotency_key, "idempotency_key"
-        )
+        normalized_key = _normalize_identity_string(idempotency_key, "idempotency_key")
         if type(parameters) is not dict:
             raise TypeError("parameters must be a dict with string keys")
 
