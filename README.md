@@ -43,3 +43,30 @@ The enum values are public lowercase snake-case strings:
 `Outcome.INDETERMINATE` represents neither confirmed execution nor confirmed
 non-execution. Reconciliation reason values are labels only; the package does
 not aggregate evidence or make reconciliation decisions.
+
+## Evidence contract
+
+`Evidence` is an immutable, provider-independent observation of one intended
+effect. Its `effect_fingerprint` must use the same versioned format as
+`EffectIdentity.fingerprint`. Call `evidence.require_effect(effect)` before
+accepting evidence for a target; a mismatch raises `ValueError` and does not
+change the evidence claim.
+
+The `EvidenceSource` identified by `source` is responsible for validating
+provider-specific semantics before producing a decisive `EvidenceClaim`.
+`binding` contains the information validated to tie the observed state to the
+intended effect. `metadata` is auxiliary and is never treated as proof by the
+core model. The two mappings remain separate. `remote_resource_id` may be
+`None` when an observation has no concrete resource, including absence-based
+or inconclusive observations.
+
+Evidence mappings accept nested mappings with string keys, lists or tuples,
+and scalar values of `None`, `bool`, `int`, `float`, or `str`. Construction
+copies them recursively; mappings are exposed read-only and sequences as
+tuples, so neither input mutation nor accessor mutation can change evidence.
+Other nested values and cyclic structures are rejected. No provider-specific
+validation or reconciliation aggregation is performed here.
+
+`ObservationFailure` is a separate immutable record of a failed observation
+with a source, caller-supplied stable code, and human-readable message. It is
+not evidence and does not imply that an effect did or did not occur.
