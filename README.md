@@ -70,3 +70,16 @@ validation or reconciliation aggregation is performed here.
 `ObservationFailure` is a separate immutable record of a failed observation
 with a source, caller-supplied stable code, and human-readable message. It is
 not evidence and does not imply that an effect did or did not occur.
+
+## Evidence sources
+
+`EvidenceSource` is a structural async protocol: an implementation exposes a
+stable `name` and an `async observe(unknown)` method returning a sequence of
+`Evidence`. Implementations do not need to inherit from EffectRecon or
+register themselves. Observation is read-only: a source must not perform or
+retry the original side effect or mutate provider state. Only provider-specific
+semantic validation can justify a decisive claim. An empty search result alone
+is not generally proof of non-execution; `INCONCLUSIVE` is a valid claim.
+Observation failure is separate from evidence and must not be turned into
+`NOT_EXECUTED`. The protocol documents these requirements but cannot enforce
+the behavior of third-party sources.
