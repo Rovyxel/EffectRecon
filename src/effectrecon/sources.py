@@ -30,4 +30,3 @@ class EvidenceSource(Protocol):
 
     async def observe(self, unknown: UnknownOutcome) -> Sequence[Evidence]:
         """Read remote state for ``unknown`` without replaying its side effect."""
-

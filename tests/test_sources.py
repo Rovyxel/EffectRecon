@@ -211,8 +211,6 @@ async def test_inconclusive_fake_remains_neither_decisive_claim() -> None:
     assert len(result) == 1
     evidence = result[0]
     assert evidence.claim is EvidenceClaim.INCONCLUSIVE
-    assert evidence.claim is not EvidenceClaim.EXECUTED
-    assert evidence.claim is not EvidenceClaim.NOT_EXECUTED
     assert evidence.effect_fingerprint == unknown.effect.fingerprint
     evidence.require_effect(unknown.effect)
 
