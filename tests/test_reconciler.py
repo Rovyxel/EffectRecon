@@ -144,11 +144,17 @@ def make_sources(
             0,
         ),
         ([], Outcome.INDETERMINATE, ReconciliationReason.INSUFFICIENT_EVIDENCE, 0, 0),
-        ([None], Outcome.INDETERMINATE, ReconciliationReason.OBSERVATION_FAILED, 0, 1),
+        (
+            [None],
+            Outcome.INDETERMINATE,
+            ReconciliationReason.INSUFFICIENT_EVIDENCE,
+            0,
+            1,
+        ),
         (
             [(EvidenceClaim.INCONCLUSIVE,), None],
             Outcome.INDETERMINATE,
-            ReconciliationReason.OBSERVATION_FAILED,
+            ReconciliationReason.INSUFFICIENT_EVIDENCE,
             1,
             1,
         ),
@@ -190,6 +196,11 @@ async def test_reconciliation_truth_table(
     assert result.reason is expected_reason
     assert len(result.evidence) == evidence_count
     assert len(result.observation_failures) == failure_count
+    assert [failure.source for failure in result.observation_failures] == [
+        f"source-{index}"
+        for index, claims in enumerate(specifications)
+        if claims is None
+    ]
 
 
 @pytest.mark.asyncio
@@ -363,7 +374,7 @@ async def test_multiple_failures_follow_registration_order_not_completion_order(
         failure.code == "observation_failed" for failure in result.observation_failures
     )
     assert result.outcome is Outcome.INDETERMINATE
-    assert result.reason is ReconciliationReason.OBSERVATION_FAILED
+    assert result.reason is ReconciliationReason.INSUFFICIENT_EVIDENCE
 
 
 @pytest.mark.asyncio
@@ -502,7 +513,7 @@ def test_result_is_immutable_and_copies_collection_inputs() -> None:
     result = ReconciliationResult(
         effect=unknown.effect,
         outcome=Outcome.INDETERMINATE,
-        reason=ReconciliationReason.OBSERVATION_FAILED,
+        reason=ReconciliationReason.INSUFFICIENT_EVIDENCE,
         evidence=mutable_evidence,
         observation_failures=mutable_failures,
         started_at=OBSERVED_AT,

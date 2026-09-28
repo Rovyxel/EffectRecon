@@ -101,9 +101,10 @@ Evidence claims are combined as follows:
 | `EXECUTED` only | `CONFIRMED_EXECUTED` / `EXECUTION_CONFIRMED` |
 | `NOT_EXECUTED` only | `CONFIRMED_NOT_EXECUTED` / `NON_EXECUTION_CONFIRMED` |
 | Both decisive claims | `INDETERMINATE` / `CONTRADICTORY_EVIDENCE` |
-| No decisive claim, with an observation failure | `INDETERMINATE` / `OBSERVATION_FAILED` |
-| No decisive claim or observation failure | `INDETERMINATE` / `INSUFFICIENT_EVIDENCE` |
+| No decisive claim | `INDETERMINATE` / `INSUFFICIENT_EVIDENCE` |
 
 `INCONCLUSIVE` evidence is retained but is not decisive. Contradictory claims
 remain indeterminate regardless of source count or order. Reconciliation
-reports facts only; it does not authorize a retry.
+reports facts only; it does not authorize a retry. Observation failures remain
+available in `observation_failures` and do not imply non-execution, including
+when the reconciliation reason is `INSUFFICIENT_EVIDENCE`.

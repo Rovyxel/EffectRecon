@@ -124,7 +124,7 @@ class Reconciler:
                 item.require_effect(unknown.effect)
             evidence.extend(source_evidence)
 
-        outcome, reason = _aggregate(evidence, has_failures=bool(failures))
+        outcome, reason = _aggregate(evidence)
         completed_at = max(datetime.now(timezone.utc), started_at)
         return ReconciliationResult(
             effect=unknown.effect,
@@ -177,9 +177,7 @@ def _observation_failure(source_name: str) -> ObservationFailure:
     )
 
 
-def _aggregate(
-    evidence: Sequence[Evidence], *, has_failures: bool
-) -> tuple[Outcome, ReconciliationReason]:
+def _aggregate(evidence: Sequence[Evidence]) -> tuple[Outcome, ReconciliationReason]:
     has_executed = any(item.claim is EvidenceClaim.EXECUTED for item in evidence)
     has_not_executed = any(
         item.claim is EvidenceClaim.NOT_EXECUTED for item in evidence
@@ -194,8 +192,6 @@ def _aggregate(
             Outcome.CONFIRMED_NOT_EXECUTED,
             ReconciliationReason.NON_EXECUTION_CONFIRMED,
         )
-    if has_failures:
-        return Outcome.INDETERMINATE, ReconciliationReason.OBSERVATION_FAILED
     return Outcome.INDETERMINATE, ReconciliationReason.INSUFFICIENT_EVIDENCE
 
 
