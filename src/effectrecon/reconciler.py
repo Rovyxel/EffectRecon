@@ -6,7 +6,7 @@ import asyncio
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from inspect import isawaitable
+from inspect import iscoroutinefunction
 
 from effectrecon.evidence import Evidence, EvidenceClaim, ObservationFailure
 from effectrecon.identity import EffectIdentity
@@ -157,14 +157,10 @@ async def _observe_source(
     source: EvidenceSource, source_name: str, unknown: UnknownOutcome
 ) -> Sequence[Evidence] | ObservationFailure:
     """Catch only ordinary exceptions raised while invoking one source."""
-    try:
-        pending_observation = source.observe(unknown)
-    except Exception:
-        return _observation_failure(source_name)
-    if not isawaitable(pending_observation):
+    if not iscoroutinefunction(source.observe):
         raise TypeError(f"EvidenceSource {source_name!r}.observe must be async")
     try:
-        return await pending_observation
+        return await source.observe(unknown)
     except Exception:
         return _observation_failure(source_name)
 

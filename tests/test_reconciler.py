@@ -444,12 +444,64 @@ async def test_synchronous_observe_implementation_fails_explicitly() -> None:
     class SynchronousSource:
         name = "sync-source"
 
+        def __init__(self) -> None:
+            self.called = False
+
         def observe(self, unknown: UnknownOutcome) -> Sequence[Evidence]:
             del unknown
+            self.called = True
             return ()
 
+    source = SynchronousSource()
     with pytest.raises(TypeError, match="observe must be async"):
-        await Reconciler([SynchronousSource()]).reconcile(unknown)  # type: ignore[list-item]
+        await Reconciler([source]).reconcile(unknown)  # type: ignore[list-item]
+    assert source.called is False
+
+
+@pytest.mark.asyncio
+async def test_synchronous_observe_exception_fails_before_invocation() -> None:
+    unknown = make_unknown()
+
+    class SynchronousRaisingSource:
+        name = "sync-raising-source"
+
+        def __init__(self) -> None:
+            self.called = False
+
+        def observe(self, unknown: UnknownOutcome) -> Sequence[Evidence]:
+            del unknown
+            self.called = True
+            raise RuntimeError("must not be normalized")
+
+    source = SynchronousRaisingSource()
+    with pytest.raises(TypeError, match="observe must be async"):
+        await Reconciler([source]).reconcile(unknown)  # type: ignore[list-item]
+    assert source.called is False
+
+
+@pytest.mark.asyncio
+async def test_synchronous_observe_returning_awaitable_is_rejected() -> None:
+    unknown = make_unknown()
+
+    class SynchronousAwaitableSource:
+        name = "sync-awaitable-source"
+
+        def __init__(self) -> None:
+            self.called = False
+
+        def observe(self, unknown: UnknownOutcome) -> object:
+            del unknown
+            self.called = True
+
+            async def return_evidence() -> Sequence[Evidence]:
+                return ()
+
+            return return_evidence()
+
+    source = SynchronousAwaitableSource()
+    with pytest.raises(TypeError, match="observe must be async"):
+        await Reconciler([source]).reconcile(unknown)  # type: ignore[list-item]
+    assert source.called is False
 
 
 @pytest.mark.asyncio
@@ -467,6 +519,9 @@ async def test_source_exception_is_safely_preserved_without_exception_details() 
         ),
     )
     assert "do-not-disclose" not in result.observation_failures[0].message
+    assert result.outcome is Outcome.INDETERMINATE
+    assert result.reason is ReconciliationReason.INSUFFICIENT_EVIDENCE
+    assert result.evidence == ()
 
 
 @pytest.mark.asyncio
