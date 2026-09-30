@@ -83,3 +83,28 @@ is not generally proof of non-execution; `INCONCLUSIVE` is a valid claim.
 Observation failure is separate from evidence and must not be turned into
 `NOT_EXECUTED`. The protocol documents these requirements but cannot enforce
 the behavior of third-party sources.
+
+## Reconciliation
+
+`Reconciler` observes its registered `EvidenceSource` instances concurrently.
+It captures source registration order at construction and normalizes results in
+that order, preserving each source's evidence order even when observations
+complete in a different order. Ordinary observation exceptions are retained
+separately as `ObservationFailure`; they do not imply non-execution or discard
+decisive evidence from another source. Cancellation propagates to the caller
+and stops child observations.
+
+Evidence claims are combined as follows:
+
+| Evidence | Result |
+| --- | --- |
+| `EXECUTED` only | `CONFIRMED_EXECUTED` / `EXECUTION_CONFIRMED` |
+| `NOT_EXECUTED` only | `CONFIRMED_NOT_EXECUTED` / `NON_EXECUTION_CONFIRMED` |
+| Both decisive claims | `INDETERMINATE` / `CONTRADICTORY_EVIDENCE` |
+| No decisive claim | `INDETERMINATE` / `INSUFFICIENT_EVIDENCE` |
+
+`INCONCLUSIVE` evidence is retained but is not decisive. Contradictory claims
+remain indeterminate regardless of source count or order. Reconciliation
+reports facts only; it does not authorize a retry. Observation failures remain
+available in `observation_failures` and do not imply non-execution, including
+when the reconciliation reason is `INSUFFICIENT_EVIDENCE`.
