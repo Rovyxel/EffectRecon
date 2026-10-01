@@ -108,3 +108,22 @@ remain indeterminate regardless of source count or order. Reconciliation
 reports facts only; it does not authorize a retry. Observation failures remain
 available in `observation_failures` and do not imply non-execution, including
 when the reconciliation reason is `INSUFFICIENT_EVIDENCE`.
+
+## Retry decisions
+
+`RetryPolicy` maps a factual `Outcome` to a caller-facing `RetryDecision`.
+It is separate from `Reconciler`, whose results remain factual. The default
+`ConservativeRetryPolicy` mapping is:
+
+| Outcome | ConservativeRetryPolicy |
+| --- | --- |
+| `CONFIRMED_EXECUTED` | `DO_NOT_RETRY` |
+| `CONFIRMED_NOT_EXECUTED` | `REPLAN_REQUIRED` |
+| `INDETERMINATE` | `MANUAL_REVIEW` |
+
+`CONFIRMED_NOT_EXECUTED` does not automatically mean retry: caller code may
+need to re-read state or re-check preconditions before another attempt is safe.
+`SAFE_TO_RETRY` is available for custom policy decisions, but
+`ConservativeRetryPolicy` never emits it. EffectRecon does not execute or
+schedule retries; caller code remains responsible for any action after
+receiving a decision.
