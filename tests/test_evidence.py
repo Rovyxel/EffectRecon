@@ -180,6 +180,27 @@ def test_invalid_expected_fingerprint_is_rejected() -> None:
         evidence.require_effect("not-a-fingerprint")
 
 
+def test_require_effect_rejects_unsupported_expected_effect_type() -> None:
+    evidence = make_evidence()
+
+    with pytest.raises(
+        TypeError, match="effect must be an EffectIdentity or fingerprint string"
+    ):
+        evidence.require_effect(object())  # type: ignore[arg-type]
+
+
+def test_observed_at_rejects_timezone_offset_errors() -> None:
+    class RaisingTimezoneOffset(tzinfo):
+        def utcoffset(self, dt: datetime | None) -> timedelta:
+            del dt
+            raise RuntimeError("timezone database unavailable")
+
+    timestamp = datetime(2026, 1, 1, 12, tzinfo=RaisingTimezoneOffset())
+
+    with pytest.raises(ValueError, match="usable timezone offset"):
+        make_evidence(observed_at=timestamp)
+
+
 def test_binding_and_metadata_stay_separate_and_metadata_is_not_a_claim() -> None:
     evidence = make_evidence(
         claim=EvidenceClaim.INCONCLUSIVE,
@@ -247,6 +268,14 @@ def test_cyclic_mapping_data_is_rejected() -> None:
 
     with pytest.raises(ValueError, match="cyclic"):
         make_evidence(binding=cyclic)
+
+
+def test_cyclic_sequence_data_is_rejected() -> None:
+    cyclic: list[object] = []
+    cyclic.append(cyclic)
+
+    with pytest.raises(ValueError, match="cyclic"):
+        make_evidence(binding={"items": cyclic})
 
 
 def test_evidence_is_frozen_and_slot_based() -> None:
