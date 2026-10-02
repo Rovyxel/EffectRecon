@@ -127,3 +127,51 @@ need to re-read state or re-check preconditions before another attempt is safe.
 `ConservativeRetryPolicy` never emits it. EffectRecon does not execute or
 schedule retries; caller code remains responsible for any action after
 receiving a decision.
+
+## Testing ambiguous outcomes
+
+`effectrecon.testing` provides reusable unit-test fixtures with no network,
+real sleep, live API, or provider SDK. These helpers do not dispatch effects
+or implement a separate reconciler. `build_scenario(scenario, effect)` requires
+an `AmbiguousOutcomeScenario` and an `EffectIdentity`, without string coercion.
+
+| Scenario | Fixture / reconciliation result |
+| --- | --- |
+| `BEFORE_DISPATCH_FAILURE` | Not dispatched; no `UnknownOutcome` or sources; do not call Reconciler |
+| `DISCONNECT_DURING_DISPATCH` | `CONNECTION_DROPPED`; inconclusive evidence; `INDETERMINATE` / `INSUFFICIENT_EVIDENCE` |
+| `EXECUTED_RESPONSE_LOST` | `RESPONSE_LOST`; `CONFIRMED_EXECUTED` / `EXECUTION_CONFIRMED` |
+| `NOT_EXECUTED_RESPONSE_LOST` | `RESPONSE_LOST`; `CONFIRMED_NOT_EXECUTED` / `NON_EXECUTION_CONFIRMED`; no retry authorization |
+| `OBSERVATION_UNAVAILABLE` | Empty evidence, one observation failure; `INDETERMINATE` / `INSUFFICIENT_EVIDENCE` |
+| `CONTRADICTORY_EVIDENCE` | Both decisive claims; `INDETERMINATE` / `CONTRADICTORY_EVIDENCE` |
+
+`ScenarioFixture` is immutable and slotted, exposing `scenario`, `effect`,
+`dispatched`, `unknown`, and a tuple of `sources`. All five post-dispatch
+fixtures retain the exact supplied effect and use fixed aware UTC timestamps,
+deterministic attempt/evidence IDs, and effect-bound evidence. Repeated
+construction and observation preserve semantic content and order; Reconciler's
+runtime start/completion timestamps are outside that guarantee.
+
+`DeterministicEvidenceSource(name, evidence=(), *, observation_unavailable=False)`
+captures an evidence sequence immutably and implements the async `EvidenceSource`
+protocol without inheritance. Its immediate `observe(unknown)` returns fixed
+evidence for the bound effect. The keyword-only `observation_unavailable=True`
+mode instead raises a fixed local `RuntimeError`; the ordinary Reconciler
+retains its normal `ObservationFailure`. No external state is read or changed.
+
+```python
+import asyncio
+
+from effectrecon import EffectIdentity, Outcome, Reconciler
+from effectrecon.testing import AmbiguousOutcomeScenario, build_scenario
+
+
+async def check_ambiguous_effect():
+    effect = EffectIdentity("send", "queue:test", {"message": "hello"}, "request-1")
+    scenario = build_scenario(AmbiguousOutcomeScenario.EXECUTED_RESPONSE_LOST, effect)
+    if scenario.unknown is not None:
+        result = await Reconciler(scenario.sources).reconcile(scenario.unknown)
+        assert result.outcome is Outcome.CONFIRMED_EXECUTED
+
+
+asyncio.run(check_ambiguous_effect())
+```
