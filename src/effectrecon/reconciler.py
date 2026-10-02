@@ -104,6 +104,7 @@ class Reconciler:
 
         evidence: list[Evidence] = []
         failures: list[ObservationFailure] = []
+        seen_evidence: set[tuple[str, str]] = set()
         for (source, source_name), observation in zip(
             self._sources, observations, strict=True
         ):
@@ -121,7 +122,19 @@ class Reconciler:
                     raise TypeError(
                         f"EvidenceSource {source_name!r} returned a non-Evidence item"
                     )
+                if item.source != source_name:
+                    raise ValueError(
+                        "Evidence source does not match the observing EvidenceSource"
+                    )
+                if not isinstance(item.claim, EvidenceClaim):
+                    raise TypeError("Evidence claim must be an EvidenceClaim")
                 item.require_effect(unknown.effect)
+                identity = (item.source, item.evidence_id)
+                if identity in seen_evidence:
+                    raise ValueError(
+                        "Duplicate Evidence identity (source, evidence_id)"
+                    )
+                seen_evidence.add(identity)
             evidence.extend(source_evidence)
 
         outcome, reason = _aggregate(evidence)
@@ -160,9 +173,14 @@ async def _observe_source(
     if not iscoroutinefunction(source.observe):
         raise TypeError(f"EvidenceSource {source_name!r}.observe must be async")
     try:
-        return await source.observe(unknown)
+        observation = await source.observe(unknown)
     except Exception:
         return _observation_failure(source_name)
+    if not isinstance(observation, Sequence):
+        raise TypeError(
+            f"EvidenceSource {source_name!r} must return a sequence of Evidence"
+        )
+    return observation
 
 
 def _observation_failure(source_name: str) -> ObservationFailure:

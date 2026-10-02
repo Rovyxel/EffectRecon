@@ -109,6 +109,17 @@ reports facts only; it does not authorize a retry. Observation failures remain
 available in `observation_failures` and do not imply non-execution, including
 when the reconciliation reason is `INSUFFICIENT_EVIDENCE`.
 
+Before aggregation, Reconciler rejects mismatched effects and requires each
+Evidence's `source` to match the observing source's registered name. Malformed
+source output or an unexpected claim type raises `TypeError`; effect or source
+mismatches raise `ValueError`. Duplicate `(source, evidence_id)` identities
+within one reconciliation fail closed with `ValueError`, even when their claims
+agree. The same textual `evidence_id` from different sources is distinct, and
+identities may be reused in separate calls. Invalid evidence is never silently
+rewritten or excluded. Contradictory decisive claims remain `INDETERMINATE`:
+there is no majority or probabilistic resolution, and timestamps or auxiliary
+metadata cannot choose a winner. Source failure never means non-execution.
+
 ## Retry decisions
 
 `RetryPolicy` maps a factual `Outcome` to a caller-facing `RetryDecision`.
