@@ -233,3 +233,17 @@ def test_to_dict_returns_a_detached_document() -> None:
     document["parameters"]["nested"].append(2)  # type: ignore[index, union-attr]
 
     assert identity.parameters == {"nested": [1]}
+
+
+def test_identity_rejects_non_string_required_fields() -> None:
+    with pytest.raises(TypeError, match="operation must be a string"):
+        make_identity({}, operation=1)  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match="target must be a string"):
+        make_identity({}, target=1)  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match="idempotency_key must be a string"):
+        make_identity({}, idempotency_key=1)  # type: ignore[arg-type]
+
+
+def test_identity_requires_a_dict_for_parameters() -> None:
+    with pytest.raises(TypeError, match="parameters must be a dict with string keys"):
+        EffectIdentity("send", "queue:alpha", None, "req-1")  # type: ignore[arg-type]

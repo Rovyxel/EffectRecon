@@ -2,7 +2,7 @@
 
 import asyncio
 from collections.abc import Sequence
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone, tzinfo
 from typing import TypeAlias
 
 import pytest
@@ -604,3 +604,128 @@ async def test_result_timestamps_are_aware_and_in_order() -> None:
     assert result.observation_failures == ()
     assert result.outcome is Outcome.INDETERMINATE
     assert result.reason is ReconciliationReason.INSUFFICIENT_EVIDENCE
+
+
+def _valid_result_arguments() -> dict[str, object]:
+    unknown = make_unknown()
+    return {
+        "effect": unknown.effect,
+        "outcome": Outcome.INDETERMINATE,
+        "reason": ReconciliationReason.INSUFFICIENT_EVIDENCE,
+        "evidence": (),
+        "observation_failures": (),
+        "started_at": OBSERVED_AT,
+        "completed_at": OBSERVED_AT,
+    }
+
+
+@pytest.mark.parametrize(
+    ("field", "invalid", "error", "message"),
+    [
+        ("effect", object(), TypeError, "effect must be an EffectIdentity"),
+        ("outcome", object(), TypeError, "outcome must be an Outcome"),
+        ("reason", object(), TypeError, "reason must be a ReconciliationReason"),
+        ("evidence", object(), TypeError, "evidence must be a sequence"),
+        (
+            "observation_failures",
+            object(),
+            TypeError,
+            "observation_failures must be a sequence",
+        ),
+        (
+            "evidence",
+            (object(),),
+            TypeError,
+            "evidence must contain only Evidence instances",
+        ),
+        (
+            "observation_failures",
+            (object(),),
+            TypeError,
+            "observation_failures must contain only ObservationFailure instances",
+        ),
+        (
+            "completed_at",
+            OBSERVED_AT.replace(year=2025),
+            ValueError,
+            "completed_at must not precede started_at",
+        ),
+    ],
+)
+def test_reconciliation_result_rejects_invalid_public_fields(
+    field: str, invalid: object, error: type[Exception], message: str
+) -> None:
+    arguments = _valid_result_arguments()
+    arguments[field] = invalid
+
+    with pytest.raises(error, match=message):
+        ReconciliationResult(**arguments)  # type: ignore[arg-type]
+
+
+class _NoTimezoneOffset(tzinfo):
+    def utcoffset(self, dt: datetime | None) -> timedelta | None:
+        del dt
+        return None
+
+
+class _RaisingTimezoneOffset(tzinfo):
+    def utcoffset(self, dt: datetime | None) -> timedelta:
+        del dt
+        raise RuntimeError("timezone database unavailable")
+
+
+def test_reconciliation_result_requires_datetime_timestamps() -> None:
+    arguments = _valid_result_arguments()
+    arguments["started_at"] = object()
+
+    with pytest.raises(TypeError, match="started_at must be a datetime"):
+        ReconciliationResult(**arguments)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
+    ("started_at", "message"),
+    [
+        (datetime(2026, 1, 1), "timezone-aware with a usable UTC offset"),
+        (
+            datetime(2026, 1, 1, tzinfo=_NoTimezoneOffset()),
+            "timezone-aware with a usable UTC offset",
+        ),
+        (
+            datetime(2026, 1, 1, tzinfo=_RaisingTimezoneOffset()),
+            "started_at must have a usable timezone offset",
+        ),
+    ],
+)
+def test_reconciliation_result_rejects_unusable_timezone_offsets(
+    started_at: datetime, message: str
+) -> None:
+    arguments = _valid_result_arguments()
+    arguments["started_at"] = started_at
+
+    with pytest.raises(ValueError, match=message):
+        ReconciliationResult(**arguments)  # type: ignore[arg-type]
+
+
+def test_reconciler_validates_structural_source_contract() -> None:
+    class NonStringNameSource:
+        name = 1
+
+        async def observe(self, unknown: UnknownOutcome) -> Sequence[Evidence]:
+            del unknown
+            return ()
+
+    class NonCallableObserveSource:
+        name = "non-callable-observe"
+        observe = None
+
+    with pytest.raises(TypeError, match="EvidenceSource.name must be a string"):
+        Reconciler([NonStringNameSource()])  # type: ignore[list-item]
+
+    with pytest.raises(TypeError, match="EvidenceSource.observe must be callable"):
+        Reconciler([NonCallableObserveSource()])  # type: ignore[list-item]
+
+
+@pytest.mark.asyncio
+async def test_reconciler_rejects_non_unknown_input() -> None:
+    with pytest.raises(TypeError, match="unknown must be an UnknownOutcome"):
+        await Reconciler([]).reconcile(object())  # type: ignore[arg-type]

@@ -1,0 +1,145 @@
+name: CI
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+      - name: Install development dependencies
+        run: python -m pip install '.[dev]'
+      - name: Run Ruff lint
+        run: ruff check .
+
+  format:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+      - name: Install development dependencies
+        run: python -m pip install '.[dev]'
+      - name: Check formatting
+        run: ruff format --check .
+
+  typecheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+      - name: Install development dependencies
+        run: python -m pip install '.[dev]'
+      - name: Run mypy
+        run: mypy src
+
+  test:
+    name: test-${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install development dependencies
+        run: python -m pip install '.[dev]'
+      - name: Run tests with coverage gate
+        run: python -m pytest --cov-fail-under=95
+
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+      - name: Install development dependencies
+        run: python -m pip install '.[dev]'
+      - name: Build wheel and sdist
+        run: python -m build
+      - name: Validate build artifacts
+        run: |
+          python - <<'PY'
+          from email.parser import BytesParser
+          from pathlib import Path
+          from tarfile import open as open_tar
+          from zipfile import ZipFile
+
+          dist = Path("dist")
+          wheels = list(dist.glob("*.whl"))
+          sdists = list(dist.glob("*.tar.gz"))
+          assert len(wheels) == 1, f"expected one wheel, found {wheels}"
+          assert len(sdists) == 1, f"expected one sdist, found {sdists}"
+
+          with ZipFile(wheels[0]) as wheel:
+              wheel_files = set(wheel.namelist())
+              metadata_path = next(
+                  path for path in wheel_files if path.endswith(".dist-info/METADATA")
+              )
+              metadata = BytesParser().parsebytes(wheel.read(metadata_path))
+              assert metadata["Name"] == "effectrecon"
+              assert metadata["Version"] == "0.0.0.dev0"
+              assert metadata["Requires-Python"] == ">=3.11"
+              requirements = metadata.get_all("Requires-Dist", [])
+              unconditional = [
+                  requirement
+                  for requirement in requirements
+                  if "extra == 'dev'" not in requirement
+                  and 'extra == "dev"' not in requirement
+              ]
+              assert not unconditional, f"unexpected runtime dependencies: {unconditional}"
+              assert "effectrecon/__init__.py" in wheel_files
+              assert "effectrecon/py.typed" in wheel_files
+
+          with open_tar(sdists[0]) as sdist:
+              sdist_files = set(sdist.getnames())
+              assert any(path.endswith("/README.md") for path in sdist_files)
+              assert any("/src/effectrecon/__init__.py" in path for path in sdist_files)
+              assert any("/tests/test_package.py" in path for path in sdist_files)
+              assert any("/examples/quickstart.py" in path for path in sdist_files)
+          PY
+      - name: Install built wheel without dependencies
+        run: python -m pip install --force-reinstall --no-deps dist/*.whl
+      - name: Verify installed package and quickstart
+        run: |
+          env -u PYTHONPATH python -c 'import effectrecon; assert effectrecon.__all__'
+          env -u PYTHONPATH python examples/quickstart.py
